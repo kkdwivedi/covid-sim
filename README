@@ -1,0 +1,125 @@
+-------------------
+COVID-19 Simulation
+-------------------
+This assignment involves performing a basic simulation using a
+computation epidemiology algorithm called SIR, and probabilistic
+transitions between different states. An individual represented as a
+node in a graph is initially Susceptible (S), then they might get
+Infected (I) and then finally Recover (R). Each transition is
+probabilistic in nature. We use a priority queue based on a dynamic
+heap implementation and simulate the spread of the disease over a
+sample population and a limited number of adjacency relationships.
+
+-----
+Index
+-----
+1. Priority Queues
+2. Graphs and Adjacency Matrices
+3. Some Computational Epidemiology
+4. Task
+
+-------------------
+(*) Priority Queues
+-------------------
+
+A priority queue is utilised to perform a discrete event simulation
+for the purpose of simulating the epidemic. The events need to be
+processed based on the timestamp (or virtual time) in the event struct
+instead of the arrival time, hence a comparator is used to keep the
+queue in sorted order for constant time extraction of highest priority
+event, at the cost of O(log(n)) amortized time insert and delete
+operations. A dynamically resizing vector implementation is used as a
+backend for the heap. The vector implementation uses a single
+allocation but divides the pool into chunks which are a multiple of
+the base unit of storage. This means that reallocations only occur for
+every n insertions and the cost is amortized. Moreover, the pool is
+not shrunk automatically, which means if the array length keeps
+changing with an upper bound on the size, the cost of reallocation
+becomes zero after the first round of insertions, at the cost of
+unused memory after multiple deletions. If a pool is pinned by atleast
+one element, it is not considered free and not shrunk on explicit
+request.
+
+---------------------------------
+(*) Graphs and Adjacency Matrices
+---------------------------------
+
+A simple graph implementation is used to model the individuals in the
+population and define their contacts. Each node represents an
+individual and the associated state. An edge is placed between two
+nodes if they are in close contact with each other. A list based
+implementation is used instead of an adjacency matrix due to the big
+size of input in the example test case (10000) which would grow the
+memory usage rapidly. A linked list based implementation also scales
+better memory wise for bigger test cases.
+
+-----------------------------------
+(*) Some Computational Epidemiology
+-----------------------------------
+
+An epidemic like COVID-19 is a SIR epidemic. An individual transitions
+from the Susceptible to Infected and possibly the Recovered
+states. Each transition in our model is probabilistic. The infection
+curves are obtained after performing the simulation of the algorithm
+described below.
+
+Algorithm [1]:
+
+while Q is not empty do
+      Event <- earliest remaining event in Q
+      if Event.type is transmit then
+	 if Event.node.status is Susceptible or Recovered then
+	    process_trans_SIR(G, Event.node, T, L)
+	 end if
+      else if Event.type is Recovered
+	    process_rec_SIR(Event.node, Event.time)
+      end if
+end while
+
+An event struct is maintained in the priority queue Q, which will
+necessarily have the following fields:
+
+(*) The time when the event occurs
+(*) The type of event (transmit or recover)
+(*) The node corresponding to the event
+
+Three global lists of S, I, and R nodes are also maintained for
+bookkeeping purposes.
+
+Specifications:
+
+process_trans_SIR
+-----------------
+If the event is a transmit event, and the corresponding node is
+susceptible, delete v from the S list and add it to the I list. Create
+events for the node v transmitting the infection to its neighbours,
+along with the time at which this happens. We use the following
+subroutine to determine these times: for each neighbour, we toss a coin
+with probability T for each day until we get a heads. For the day we
+get a heads, we put a transmit event for that neighbour. We use a
+biased coin for this purpose. The undirected graph is represented by G.
+
+The recovery of node v happens by tossing a biased coin with
+probability L of it showing heads. We keep tossing until we get a
+heads. If we get heads on the ith trial, v will recover after i
+days. So, we create an event for that and insert in the priority
+queue.
+
+process_rec_SIR
+---------------
+If the event is a recover event, then remove that node from the I list
+and add it to the R list.
+
+--------
+(*) Task
+--------
+We have to perform the simulation for a maximum of 300 days, use T as
+0.5 and L as 0.2. The sample size for individuals is 10000 and the
+number of edges must be no more than 3000. The graph generation must
+be randomized.
+
+--
+Author: Kumar Kartikeya Dwivedi <memxor@gmail.com>
+
+References:
+[1] https://link.springer.com/content/pdf/bbm%3A978-3-319-50806-1%2F1.pdf
