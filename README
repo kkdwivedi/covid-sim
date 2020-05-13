@@ -59,7 +59,7 @@ better memory wise for bigger test cases.
 
 An epidemic like COVID-19 is a SIR epidemic. An individual transitions
 from the Susceptible to Infected and possibly the Recovered
-states. Each transition in our model is probabilistic. The infection
+state. Each transition in our model is probabilistic. The infection
 curves are obtained after performing the simulation of the algorithm
 described below.
 
@@ -67,11 +67,11 @@ Algorithm [1]:
 
 while Q is not empty do
       Event <- earliest remaining event in Q
-      if Event.type is transmit then
+      if Event.type is Transmit then
 	 if Event.node.status is Susceptible or Recovered then
 	    process_trans_SIR(G, Event.node, T, L)
 	 end if
-      else if Event.type is Recovered
+      else if Event.type is Recover
 	    process_rec_SIR(Event.node, Event.time)
       end if
 end while
