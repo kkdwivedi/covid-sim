@@ -141,7 +141,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 	struct sir *s = sir_list_del_item(ev->node, &ListS);
 	/* delete from recovered list */
 	if (!s) s = sir_list_del_item(ev->node, &ListR);
-	if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
+	// if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
 	/* add to infected list, if not in there already */
 	if (s) sir_list_add_sir(s, &ListI);
 	/* for each neighbour */
@@ -188,7 +188,7 @@ void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 	struct sir *s = sir_list_del_item(ev->node, &ListS);
 	/* delete from recovered list */
 	if (!s) s = sir_list_del_item(ev->node, &ListI);
-	if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
+	// if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
 	/* add to recovery list, if not in there already */
 	if (s) sir_list_add_sir(s, &ListR);
 }

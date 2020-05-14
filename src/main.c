@@ -2,6 +2,9 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 #include "config.h"
 #include "prioq.h"
@@ -32,6 +35,27 @@ __attribute__((noreturn)) void usage(void)
 	log_error("This program takes no arguments.");
 	exit(0);
 }
+
+#ifdef __GLIBC__
+
+static void configure_malloc_behavior(void)
+{
+	mallopt(M_TRIM_THRESHOLD, -1);
+	mallopt(M_MMAP_MAX, 0);
+}
+
+static void reserve_mem(size_t size)
+{
+	char *buf = malloc(size);
+	int pagesize = sysconf(_SC_PAGESIZE);
+	/* touch each page of memory to fault it in */
+	for (int i = 0; i < size; i += pagesize) {
+		buf[i] = 0;
+	}
+	free(buf);
+}
+
+#endif
 
 static void dump_stats(Node *n, unsigned mask)
 {
@@ -70,6 +94,11 @@ int main(int argc, char *argv[])
 	PriorityQueue *pq = NULL;
 	Node *narr = NULL;
 	int r;
+
+#ifdef __GLIBC__
+	configure_malloc_behavior();
+	reserve_mem(512*1024*1024);
+#endif
 
 	srand48(0xfaceb00c);
 	if (argc > 1)
