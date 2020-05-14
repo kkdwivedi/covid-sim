@@ -11,7 +11,8 @@ PriorityQueue* pq_new(void)
 	PriorityQueue *pq = calloc(1, sizeof(*pq));
 	if (!pq) return NULL;
 	pq->vec = vector_new(sizeof(PQEvent*));
-	if (!pq->vec) return NULL;
+	/* caught by cppcheck */
+	if (!pq->vec) { free(pq); return NULL; }
 	pq->events = (PQEvent **) pq->vec->p;
 	return pq;
 }
@@ -44,9 +45,12 @@ PQEvent* pqevent_new(Node *node, EventType type)
 bool pqevent_add(PriorityQueue *pq, PQEvent *ev)
 {
 	size_t i = pq->vec->length;
-	vector_push_back(pq->vec, ev);
-	i--;
-	return true;
+	int r = vector_push_back(pq->vec, ev);
+	if (r < 0) {
+		log_error("Failed to grow vector.");
+		return false;
+	}
+	return false;
 }
 
 static void pq_pop_front(PriorityQueue *pq)
@@ -63,6 +67,7 @@ PQEvent* pqevent_next(PriorityQueue *pq)
 
 static bool get_heads(double bias)
 {
+	;
 	return true;
 }
 
@@ -80,15 +85,16 @@ static size_t toss_coin(size_t time, double bias)
 
 void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 {
-	/* XXX: check that node state is IN_SET(SUSCEPTIBLE,RECOVERED) */
 	assert(ev);
 	Node *n = ev->node;
 	/* delete from susceptible list */
-	sir_list_del_item(ev->node, &ListS);
-	/* delete from recovered list */
-	sir_list_del_item(ev->node, &ListR);
+	struct sir *s = sir_list_del_item(ev->node, &ListS);
+	if (!s) {
+                /* delete from recovered list */
+		s = sir_list_del_item(ev->node, &ListR);
+	} else (void) sir_list_del_item(ev->node, &ListR);
 	/* add to infected list */
-	if (!sir_list_add_item(ev->node, &ListI)) log_oom();
+	sir_list_add_sir(s, &ListI);
 	/* for each neighbour */
 	list_for_each_entry(n, n->neigh.next, Node, neigh) {
 		/* add transmit event */
@@ -115,18 +121,22 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 			log_error("Failed to add RECOVER event for Node %u", n->id);
 			goto finish;
 		}
+		continue;
 	finish:
 		pqevent_delete(t);
 		pqevent_delete(r);
 	}
+	pqevent_delete(ev);
 }
 
 void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 {
 	/* delete from infected list */
-	sir_list_del_item(ev->node, &ListI);
+	struct sir *s = sir_list_del_item(ev->node, &ListI);
+	assert(s);
 	/* add to recovered list */
-	if (!sir_list_add_item(ev->node, &ListR)) log_oom();
+	sir_list_add_sir(s, &ListR);
+	pqevent_delete(ev);
 }
 
 void pqevent_delete(PQEvent *ev)

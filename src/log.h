@@ -13,7 +13,7 @@ enum log_level {
 	_LOG_LEVEL_MAX,
 };
 
-//#define LOG_DEBUG 1
+//#define LOG_DEBUG
 #define LOG_BUF_SIZE 4096U
 
 extern char log_buf[];

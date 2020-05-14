@@ -1,12 +1,7 @@
 #ifndef GRAPH_H
 #define GRAPH_H
 
-#include <assert.h>
 #include <stdbool.h>
-#include <stddef.h>
-#include <limits.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 #include "log.h"
 #include "config.h"
@@ -104,117 +99,16 @@ typedef struct node Node;
 
 static unsigned int id_gen;
 
-static bool sir_list_add_item(Node *n, List *l)
-{
-	static size_t iterator = 0;
-	static struct sir *pool = NULL;
-	if (!l && !n) {
-		free(pool);
-		pool = NULL;
-		iterator = 0;
-		return true;
-	}
-	if (!pool) {
-		pool = calloc(SAMPLE_SIZE*2, sizeof(*pool));
-		if (!pool) return false;
-	}
-	struct sir *s = NULL;
-	if (iterator < SAMPLE_SIZE*2)
-		s = pool + iterator++;
-	if (!s) return false;
-	list_append(l, &s->list);
-	s->item = n;
-	return true;
-}
+bool sir_list_add_item(Node *n, List *l);
+void sir_list_add_sir(struct sir *s, List *l);
+struct sir* sir_list_del_item(Node *n, List *l);
+void sir_list_dump(List *l);
+void sir_list_del_rec(List *l);
+size_t sir_list_len(List *l);
 
-static void sir_list_del_item(Node *n, List *l)
-{
-	/* l is assumed to be anchor, not an object embedded in entry */
-	struct sir *i;
-	list_for_each_entry(i, l->next, struct sir, list) {
-		if (i->item == n) {
-			struct sir *f = container_of(&i->list, struct sir, list);
-			/* updates l->next */
-			list_delete(&l->next, &i->list);
-			free(f);
-			break;
-		}
-	}
-}
-
-static void sir_list_dump(List *l)
-{
-	struct sir *i;
-	list_for_each_entry(i, l->next, struct sir, list)
-		fprintf(stderr, "%u ", i->item->id);
-	log_info("");
-}
-
-static void sir_list_del_rec(List *l)
-{
-	if (!l->next) return;
-	struct sir *i;
-	/* we cannot use list_for_each_entry here, since we need to
-	 * advance the iterator and only then free the memory
-	 */
-	for (i = container_of(l->next, struct sir, list); i;) {
-		struct sir *f = i;
-		i = i->list.next ? container_of(i->list.next, struct sir, list) : NULL;
-		//sir_list_dump(&f->list, true);
-		free(f);
-	}
-	l->next = NULL;
-}
-
-static size_t sir_list_len(List *l)
-{
-	/* begin counting from next, as l is anchor */
-	size_t count = 0;
-	while (l->next) {
-		l = l->next;
-		count++;
-	}
-	return count;
-}
-
-static inline Node* node_new(size_t sz)
-{
-	if (id_gen == UINT_MAX) return NULL;
-	Node *n = calloc(sz, sizeof(*n));
-	if (!n) return NULL;
-	for (size_t i = 0; i < sz; i++) {
-		n[i].id = ++id_gen;
-		n[i].state = SIR_SUSCEPTIBLE;
-	}
-	return n;
-}
-
-static inline void node_connect(Node *a, Node *b)
-{
-	assert(a);
-	assert(b);
-	struct sir *i;
-	if (a == b)
-		return;
-	list_for_each_entry(i, a->neigh.next, struct sir, list)
-		if (i->item == b) return;
-/*	list_for_each_entry(i, b->neigh.next, struct sir, list)
-		if (i->item == a) return;
-*/
-	sir_list_add_item(a, &b->neigh);
-	sir_list_add_item(b, &a->neigh);
-	max_conn++;
-}
-
-static inline void node_dump_adjacent_nodes(Node *n)
-{
-	fprintf(stderr, "Node %u: ", n->id);
-	sir_list_dump(&n->neigh);
-}
-
-static inline void node_delete(Node *n)
-{
-	sir_list_del_rec(&n->neigh);
-}
+Node* node_new(size_t sz);
+void node_connect(Node *a, Node *b);
+void node_dump_adjacent_nodes(Node *n);
+void node_delete(Node *n);
 
 #endif
