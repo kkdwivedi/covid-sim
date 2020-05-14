@@ -152,15 +152,23 @@ int main(int argc, char *argv[])
 			log_info("Processing event RECOVER at time %lu for Node %u", ev->timestamp, ev->node->id);
 			process_rec_SIR(pq, ev);
 		} else assert(false);
-	} // pqevent_delete(ev);
-	pqevent_add(pq, &(PQEvent){});
-	/* ev is either live or NULL */
-	do {
-		if (ev && ev->type == RECOVER)
-			process_rec_SIR(pq, ev);
-		else /* process_* take ownership */ pqevent_delete(ev);
-	} while (ev = pqevent_next(pq), ev && ev->node);
-
+		pqevent_delete(ev);
+	}
+	if (ev) {
+		/* min-heap was not empty */
+		/* caught by LSAN: this is a min heap, so a zero
+		initialized PQEvent is not really a good end marker,
+		since it would swap its way up to the top, and cut
+		short our loop below, leaking memory, hence make the
+		timestamp infinite */
+		pqevent_add(pq, &(PQEvent){ .timestamp = -1 });
+		do {
+			if (ev->type == RECOVER)
+				process_rec_SIR(pq, ev);
+			/* delete events of either type */
+			pqevent_delete(ev);
+		} while (ev = pqevent_next(pq), ev && ev->node);
+	}
 	dump_stats(narr, DUMP_SIR|DUMP_NUM|DUMP_NODE);
 finish:
 // Not useful with pool based SIR nodes

@@ -81,19 +81,22 @@ bool pqevent_add(PriorityQueue *pq, PQEvent *ev)
 	   with new address. This can also happen during normal growth */
 	pq->events = (PQEvent **) pq->vec->p;
 	pq_heapify(pq, pq->vec->length - 1);
-
 	return true;
 }
 
 static bool pq_pop_front(PriorityQueue *pq)
 {
+	static int i = 0;
 	if (!pq->vec->length) return false;
 	pq->events[0] = pq->events[pq->vec->length - 1];
-	if (!vector_pop_back(pq->vec)) {
-		pq->events = NULL;
-		return false;
-	}
+	vector_pop_back(pq->vec);
 	pq_heapify(pq, 0);
+	i++;
+	if (i > 31) {
+		vector_shrink_to_fit(pq->vec);
+		pq->events = (PQEvent **) pq->vec->p;
+		i = 0;
+	}
 	return true;
 }
 
@@ -174,7 +177,6 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 		pqevent_delete(t);
 		pqevent_delete(r);
 	}
-	pqevent_delete(ev);
 }
 
 void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
@@ -187,7 +189,6 @@ void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 	if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
 	/* add to recovery list, if not in there already */
 	if (s) sir_list_add_sir(s, &ListR);
-	pqevent_delete(ev);
 }
 
 void pqevent_delete(PQEvent *ev)
