@@ -137,13 +137,16 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 	assert(pq);
 	assert(ev);
 	Node *n = ev->node;
-	/* delete from susceptible list */
-	struct sir *s = sir_list_del_item(ev->node, &ListS);
-	/* delete from recovered list */
-	if (!s) s = sir_list_del_item(ev->node, &ListR);
-	// if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
-	/* add to infected list, if not in there already */
-	if (s) sir_list_add_sir(s, &ListI);
+	struct sir *s;
+	if (ev->node->state != SIR_INFECTED) {
+		if (ev->node->state == SIR_SUSCEPTIBLE)
+			s = sir_list_del_item(ev->node, &ListS);
+		else if (ev->node->state == SIR_RECOVERED)
+			s = sir_list_del_item(ev->node, &ListR);
+		/* add to infected list, if not in there already */
+		sir_list_add_sir(s, &ListI);
+		s->item->state = SIR_INFECTED;
+	}
 	/* for each neighbour */
 	list_for_each_entry(s, n->neigh.next, struct sir, list) {
 		/* add transmit event */
@@ -184,13 +187,15 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 {
 	assert(ev);
-        /* delete from susceptible list */
-	struct sir *s = sir_list_del_item(ev->node, &ListS);
-	/* delete from recovered list */
-	if (!s) s = sir_list_del_item(ev->node, &ListI);
-	// if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
-	/* add to recovery list, if not in there already */
-	if (s) sir_list_add_sir(s, &ListR);
+	struct sir *s;
+	if (ev->node->state != SIR_RECOVERED) {
+		if (ev->node->state == SIR_SUSCEPTIBLE)
+			s = sir_list_del_item(ev->node, &ListS);
+		else if (ev->node->state == SIR_INFECTED)
+			s = sir_list_del_item(ev->node, &ListI);
+		sir_list_add_sir(s, &ListR);
+		s->item->state = SIR_RECOVERED;
+	}
 }
 
 void pqevent_delete(PQEvent *ev)
