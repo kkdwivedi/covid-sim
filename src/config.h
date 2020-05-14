@@ -1,4 +1,4 @@
 // Test case for simulation
-#define SAMPLE_SIZE 1000U
-#define NR_EDGES    30U
-#define TIME_MAX    300U
+#define SAMPLE_SIZE 10U
+#define NR_EDGES    3U
+#define TIME_MAX    10U

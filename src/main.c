@@ -10,6 +10,7 @@
 
 /* TODO:
  * Ensure that the SAMPLE_SIZE is no bigger than RAND_MAX
+ * Find some comprehensive fix to UAFs from vector_reset
  */
 
 char log_buf[LOG_BUF_SIZE];
@@ -59,6 +60,7 @@ static size_t gen_random_id(size_t b, size_t except)
 	// b = b < RAND_MAX + 1ULL ? b : RAND_MAX + 1ULL;
 	assert(except < b);
 	size_t r;
+	if (b == 1) return 0;
 	while ((r = lrand48() % b) == except);
 	return r;
 }

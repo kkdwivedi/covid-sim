@@ -22,9 +22,10 @@ int vector_grow_many(Vector *v, size_t n)
 
 int vector_shrink_to_fit(Vector *v)
 {
+	// empty vector
+	if (!v->pool) return 0;
 	size_t used = v->unit * v->length;
-	if (used % v->pool)
-		return 0;
+	if (used % v->pool) return 0;
 	/* stored size is multiple of pool size, find if a pool is free */
 	ssize_t diff = v->nr_pool - used / v->pool;
 	assert(diff >= 0);

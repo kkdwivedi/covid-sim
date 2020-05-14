@@ -90,9 +90,11 @@ static bool pq_pop_front(PriorityQueue *pq)
 	if (!pq->vec->length) return false;
 	pq->events[0] = pq->events[pq->vec->length - 1];
 	vector_pop_back(pq->vec);
+	pq->events = (PQEvent **) pq->vec->p;
 	pq_heapify(pq, 0);
 	i++;
-	if (i > 31) {
+	/* XXX: add vec_is_empty primitive, vector might have been reset */
+	if (i > 7 && pq->vec->length) {
 		vector_shrink_to_fit(pq->vec);
 		pq->events = (PQEvent **) pq->vec->p;
 		i = 0;
@@ -125,7 +127,7 @@ static size_t toss_coin(size_t time, double bias)
 			break;
 	}
 	/* speed up things */
-	time += lrand48() % (TIME_MAX/100);
+	time += 4;
 	/* days elapsed */
 	return time <= (TIME_MAX - t) ? time + t : TIME_MAX;
 }
