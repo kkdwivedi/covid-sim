@@ -93,11 +93,10 @@ size_t sir_list_len(List *l)
 
 Node* node_new(size_t sz)
 {
-	if (id_gen == UINT_MAX) return NULL;
 	Node *n = calloc(sz, sizeof(*n));
 	if (!n) return NULL;
 	for (size_t i = 0; i < sz; i++) {
-		n[i].id = ++id_gen;
+		n[i].id = i + 1;
 		n[i].state = SIR_SUSCEPTIBLE;
 	}
 	return n;
@@ -108,8 +107,7 @@ void node_connect(Node *a, Node *b)
 	assert(a);
 	assert(b);
 	struct sir *i;
-	if (a == b)
-		return;
+	if (a == b) return;
 	list_for_each_entry(i, a->neigh.next, struct sir, list)
 		if (i->item == b) return;
 /*	list_for_each_entry(i, b->neigh.next, struct sir, list)

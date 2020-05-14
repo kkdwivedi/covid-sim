@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdlib.h>
 
+#include "config.h"
 #include "graph.h"
 #include "prioq.h"
 #include "vector.h"
@@ -42,33 +43,74 @@ PQEvent* pqevent_new(Node *node, EventType type)
 	return ev;
 }
 
+static void swap(PQEvent **a, PQEvent **b)
+{
+	PQEvent *temp = *a;
+	*a = *b;
+	*b = temp;
+}
+
+static void pq_heapify(PriorityQueue *pq, size_t i)
+{
+	/* min heap */
+	if (i >= pq->vec->length) return;
+	size_t lim = pq->vec->length;
+	size_t left = i * 2 + 1;
+	size_t right = i * 2 + 2;
+	size_t smaller = i;
+	if (left < lim && pq->events[smaller]->timestamp > pq->events[left]->timestamp)
+		smaller = left;
+	if (right < lim && pq->events[smaller]->timestamp > pq->events[right]->timestamp)
+		smaller = right;
+	if (smaller != i) {
+		swap(&pq->events[i], &pq->events[smaller]);
+		pq_heapify(pq, smaller);
+	}
+}
+
 bool pqevent_add(PriorityQueue *pq, PQEvent *ev)
 {
-	size_t i = pq->vec->length;
-	int r = vector_push_back(pq->vec, ev);
+	assert(pq);
+	assert(ev);
+	int r = vector_push_back(pq->vec, &ev);
 	if (r < 0) {
 		log_error("Failed to grow vector.");
 		return false;
 	}
-	return false;
+	/* caught by ASAN: possibly resized/reinitialized, so replace
+	   with new address. This can also happen during normal growth */
+	pq->events = (PQEvent **) pq->vec->p;
+	pq_heapify(pq, pq->vec->length - 1);
+
+	return true;
 }
 
-static void pq_pop_front(PriorityQueue *pq)
+static bool pq_pop_front(PriorityQueue *pq)
 {
-	return;
+	if (!pq->vec->length) return false;
+	pq->events[0] = pq->events[pq->vec->length - 1];
+	if (!vector_pop_back(pq->vec)) {
+		pq->events = NULL;
+		return false;
+	}
+	pq_heapify(pq, 0);
+	return true;
 }
 
 PQEvent* pqevent_next(PriorityQueue *pq)
 {
-	PQEvent *r = *pq->events;
-	pq_pop_front(pq);
+	assert(pq);
+	PQEvent *r = pq->events ? pq->events[0] : NULL;
+	if (!pq_pop_front(pq)) return NULL;
 	return r;
 }
 
 static bool get_heads(double bias)
 {
-	;
-	return true;
+	assert(bias >= 0.0 && bias <= 1.0);
+	int i = bias * 1000;
+	if (lrand48() % 1000 < i) return true;
+	return false;
 }
 
 static size_t toss_coin(size_t time, double bias)
@@ -79,25 +121,28 @@ static size_t toss_coin(size_t time, double bias)
 		if (get_heads(bias))
 			break;
 	}
+	/* speed up things */
+	time += lrand48() % (TIME_MAX/100);
 	/* days elapsed */
 	return time <= (TIME_MAX - t) ? time + t : TIME_MAX;
 }
 
 void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 {
+	assert(pq);
 	assert(ev);
 	Node *n = ev->node;
 	/* delete from susceptible list */
 	struct sir *s = sir_list_del_item(ev->node, &ListS);
-	if (!s) {
-                /* delete from recovered list */
-		s = sir_list_del_item(ev->node, &ListR);
-	} else (void) sir_list_del_item(ev->node, &ListR);
-	/* add to infected list */
-	sir_list_add_sir(s, &ListI);
+	/* delete from recovered list */
+	if (!s) s = sir_list_del_item(ev->node, &ListR);
+	if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
+	/* add to infected list, if not in there already */
+	if (s) sir_list_add_sir(s, &ListI);
 	/* for each neighbour */
-	list_for_each_entry(n, n->neigh.next, Node, neigh) {
+	list_for_each_entry(s, n->neigh.next, struct sir, list) {
 		/* add transmit event */
+		Node *n = s->item;
 		PQEvent *r = NULL, *t = pqevent_new(n, TRANSMIT);
 		if (!t) {
 			log_error("Failed to create TRANSMIT event for Node %u", n->id);
@@ -109,6 +154,8 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 			log_error("Failed to add TRANSMIT event for Node %u", n->id);
 			goto finish;
 		}
+		log_info("Added TRANSMIT event for Node %u with time %lu", n->id, t->timestamp);
+
 		r = pqevent_new(n, RECOVER);
 		if (!r) {
 			log_error("Failed to create RECOVER event for Node %u", n->id);
@@ -116,11 +163,12 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 			goto finish;
 		}
 		/* can only recover after being detected as infected */
-		r->timestamp = toss_coin(t->timestamp, ev->T);
+		r->timestamp = toss_coin(t->timestamp, ev->Y);
 		if (!pqevent_add(pq, r)) {
 			log_error("Failed to add RECOVER event for Node %u", n->id);
 			goto finish;
 		}
+		log_info("Added RECOVER event for Node %u with time %lu", n->id, r->timestamp);
 		continue;
 	finish:
 		pqevent_delete(t);
@@ -131,11 +179,14 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 
 void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 {
-	/* delete from infected list */
-	struct sir *s = sir_list_del_item(ev->node, &ListI);
-	assert(s);
-	/* add to recovered list */
-	sir_list_add_sir(s, &ListR);
+	assert(ev);
+        /* delete from susceptible list */
+	struct sir *s = sir_list_del_item(ev->node, &ListS);
+	/* delete from recovered list */
+	if (!s) s = sir_list_del_item(ev->node, &ListI);
+	if (!s) log_warn("Node %u not present in ListS or ListR.", ev->node->id);
+	/* add to recovery list, if not in there already */
+	if (s) sir_list_add_sir(s, &ListR);
 	pqevent_delete(ev);
 }
 

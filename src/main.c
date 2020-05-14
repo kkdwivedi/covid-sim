@@ -37,7 +37,7 @@ static void dump_stats(Node *n, unsigned mask)
 	if (mask & DUMP_NUM) {
 		log_info("Sample Size:        %u", SAMPLE_SIZE);
 		log_info("Max edges:          %u", NR_EDGES);
-		log_info("Nodes connected:    %u", max_conn);
+		log_info("Connections made:   %zu", max_conn);
 		log_info("Initial spreaders:  %zu", sir_list_len(&ListI));
 	}
 	if (mask & DUMP_SIR) {
@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 
 	r = setvbuf(stderr, log_buf, _IOFBF, LOG_BUF_SIZE);
 	if (r < 0)
-		log_warn("Failed to set up log buffer: %m");
+		log_warn("Failed to set up log buffer.");
 
 	pq = pq_new();
 	if (!pq) {
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 	dump_stats(NULL, DUMP_SIR);
 
 	// now connect nodes, randomly
-	for (size_t i = lrand48() % SAMPLE_SIZE/2; i < SAMPLE_SIZE; i++) {
+	for (size_t i = lrand48() % SAMPLE_SIZE; i < SAMPLE_SIZE; i += 2) {
 		int c = 0;
 		c = lrand48() % NR_EDGES/2;
 		while (c--) {
@@ -117,12 +117,14 @@ int main(int argc, char *argv[])
 	size_t infect = gen_random_id(SAMPLE_SIZE, 0);
 	while (infect--) {
 		size_t r = gen_random_id(SAMPLE_SIZE, 0);
+		/*
 		struct sir *s = sir_list_del_item(narr + r, &ListS);
 		if (!s) {
 			log_warn("Node %u not found in Susceptible list.", narr[r].id);
 			continue;
 		}
 		else sir_list_add_sir(s, &ListI);
+		*/
 		PQEvent *ev = pqevent_new(narr + r, TRANSMIT);
 		if (!ev) {
 			log_warn("Failed to allocate TRANSMIT event for spreader %u.", narr[r].id);
@@ -140,12 +142,24 @@ int main(int argc, char *argv[])
 	dump_stats(NULL, DUMP_SIR);
 
 	// begin simulation
-	for (PQEvent *ev = pqevent_next(pq); ev && ev->timestamp < TIME_MAX; ev = pqevent_next(pq)) {
+	PQEvent *ev;
+	for (ev = pqevent_next(pq); ev && ev->timestamp < TIME_MAX; ev = pqevent_next(pq)) {
 		if (ev->type == TRANSMIT) {
+			log_info("Processing event TRANSMIT at time %lu for Node %u", ev->timestamp, ev->node->id);
 			if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE, SIR_RECOVERED))
 				process_trans_SIR(pq, ev);
-		} else if (ev->type == RECOVER) process_rec_SIR(pq, ev);
-	}
+		} else if (ev->type == RECOVER) {
+			log_info("Processing event RECOVER at time %lu for Node %u", ev->timestamp, ev->node->id);
+			process_rec_SIR(pq, ev);
+		} else assert(false);
+	} // pqevent_delete(ev);
+	pqevent_add(pq, &(PQEvent){});
+	/* ev is either live or NULL */
+	do {
+		if (ev && ev->type == RECOVER)
+			process_rec_SIR(pq, ev);
+		else /* process_* take ownership */ pqevent_delete(ev);
+	} while (ev = pqevent_next(pq), ev && ev->node);
 
 	dump_stats(narr, DUMP_SIR|DUMP_NUM|DUMP_NODE);
 finish:

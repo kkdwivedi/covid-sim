@@ -10,7 +10,6 @@ extern List ListS;
 extern List ListI;
 extern List ListR;
 
-#define TIME_MAX 300U
 #define PROB_T 0.5
 #define PROB_Y 0.2
 
@@ -21,11 +20,6 @@ enum eventtype {
 };
 
 typedef enum eventtype EventType;
-
-static inline int comparator(unsigned int a, unsigned int b)
-{
-	return a < b ? -1 : (a == b ? 0 : 1);
-}
 
 typedef struct priorityqueue PriorityQueue;
 typedef struct pqevent PQEvent;

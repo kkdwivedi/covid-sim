@@ -97,8 +97,6 @@ struct node {
 
 typedef struct node Node;
 
-static unsigned int id_gen;
-
 bool sir_list_add_item(Node *n, List *l);
 void sir_list_add_sir(struct sir *s, List *l);
 struct sir* sir_list_del_item(Node *n, List *l);
