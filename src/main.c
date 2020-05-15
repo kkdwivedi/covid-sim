@@ -61,7 +61,7 @@ static void dump_stats(Node *n, unsigned mask)
 		log_info("Sample Size:        %u", SAMPLE_SIZE);
 		log_info("Max edges:          %u", NR_EDGES);
 		log_info("Connections made:   %zu", max_conn);
-		log_info("Initial spreaders:  %zu", sir_list_len(&ListI));
+		log_info("Infected people:    %zu", sir_list_len(&ListI));
 	}
 	if (mask & DUMP_SIR) {
 		log_info("Susceptible: "); sir_list_dump(&ListS);
@@ -82,12 +82,18 @@ int main(int argc, char *argv[])
 	Node *narr = NULL;
 	int r;
 
+	if (NR_EDGES > SAMPLE_SIZE - 1) {
+		log_error("Incorrect NR_EDGES value configured.");
+		return 1;
+	}
 #ifdef __GLIBC__
-	configure_malloc_behavior();
-	reserve_mem(512*1024*1024);
+	if (SAMPLE_SIZE > 100) {
+		configure_malloc_behavior();
+		reserve_mem(512*1024*1024);
+	}
 #endif
 
-	srand48(0x0bad1dea);
+	srand(0x0bad1dea);
 	if (argc > 1)
 		usage();
 
@@ -123,7 +129,7 @@ int main(int argc, char *argv[])
 	// now connect nodes, randomly
 	for (size_t i = 0; i < SAMPLE_SIZE; i += 2) {
 		int c = 0;
-		c = lrand48() % (NR_EDGES+1);
+		c = rand() % (NR_EDGES+1);
 		while (c--) {
 			size_t j = gen_random_id(SAMPLE_SIZE, i);
 			node_connect(&narr[i], &narr[j]);
@@ -135,11 +141,9 @@ int main(int argc, char *argv[])
 	size_t infect = gen_random_id(SAMPLE_SIZE, 0);
 	while (infect--) {
 		size_t r = gen_random_id(SAMPLE_SIZE, -1);
-		if (narr[r].state != SIR_INFECTED) {
-			struct sir *s = sir_list_del_item(narr + r, &ListS);
-			sir_list_add_sir(s, &ListI);
-			s->item->state = SIR_INFECTED;
-		} else continue;
+		if (narr[r].initial == true) {
+			continue;
+		}
 		PQEvent *ev = pqevent_new(narr + r, TRANSMIT);
 		if (!ev) {
 			log_warn("Failed to allocate TRANSMIT event for spreader %u.", narr[r].id);
@@ -148,17 +152,30 @@ int main(int argc, char *argv[])
 		}
 		ev->timestamp = 0;
 		if (!pqevent_add(pq, ev)) {
-			log_warn("Failed to add TRANSMIT event for spreader %u", narr[r].id);
+			log_warn("Failed to add TRANSMIT event for spreader %u.", narr[r].id);
 			pqevent_delete(ev);
 			continue;
 		}
+		log_info("Added TRANSMIT event for initial spreader %u with time %lu", narr[r].id, ev->timestamp);
+		ev = pqevent_new(narr + r, RECOVER);
+		if (!ev) {
+			log_warn("Failed to allocate RECOVER event for spreader %u.", narr[r].id);
+			log_oom();
+			continue;
+		}
+		ev->timestamp = toss_coin(0, ev->Y) + 12;
+		if (!pqevent_add(pq, ev)) {
+			log_warn("Failed to add RECOVER event for spreader %u.", narr[r].id);
+			pqevent_delete(ev);
+			continue;
+		}
+		log_info("Added RECOVER event for initial spreader %u with time %lu", narr[r].id, ev->timestamp);
+		narr[r].initial = true;
 	}
-	log_info("Lists after infection: ");
-	dump_stats(NULL, DUMP_SIR);
 
 	// begin simulation
 	PQEvent *ev;
-	for (ev = pqevent_next(pq); ev && ev->timestamp <= TIME_MAX; ev = pqevent_next(pq)) {
+	for (ev = pqevent_next(pq); ev && ev->timestamp < TIME_MAX; ev = pqevent_next(pq)) {
 		if (ev->type == TRANSMIT) {
 			log_info("Processing event TRANSMIT at time %lu for Node %u", ev->timestamp, ev->node->id);
 			if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE, SIR_RECOVERED) ||
@@ -179,9 +196,6 @@ int main(int argc, char *argv[])
 		timestamp infinite */
 		pqevent_add(pq, &(PQEvent){ .timestamp = -1 });
 		do {
-			if (ev->type == RECOVER)
-				process_rec_SIR(pq, ev);
-			/* delete events of either type */
 			pqevent_delete(ev);
 		} while (ev = pqevent_next(pq), ev && ev->node);
 	}

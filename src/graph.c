@@ -101,6 +101,7 @@ Node* node_new(size_t sz)
 		n[i].state = SIR_SUSCEPTIBLE;
 		n[i].neigh.next = NULL;
 		n[i].last = NULL;
+		n[i].initial = false;
 	}
 	return n;
 }
@@ -113,9 +114,6 @@ void node_connect(Node *a, Node *b)
 	if (a == b) return;
 	list_for_each_entry(i, a->neigh.next, struct sir, list)
 		if (i->item == b) return;
-/*	list_for_each_entry(i, b->neigh.next, struct sir, list)
-		if (i->item == a) return;
-*/
 	sir_list_add_item(a, &b->neigh);
 	sir_list_add_item(b, &a->neigh);
 	max_conn++;

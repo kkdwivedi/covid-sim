@@ -126,7 +126,7 @@ size_t gen_random_id(size_t b, size_t except)
 	assert(except < b || except == (size_t) -1);
 	size_t r;
 	if (b == 1) return 0;
-	r = lrand48() % b;
+	r = rand() % b;
 	return r == except ? (r < 1 ? r + 1 : r - 1) : r;
 }
 
@@ -138,7 +138,7 @@ static bool get_heads(double bias)
 	return false;
 }
 
-static size_t toss_coin(size_t ts, double bias)
+size_t toss_coin(size_t ts, double bias)
 {
 	assert(bias <= 1.0);
 	size_t t = 0;
@@ -155,6 +155,8 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 	assert(ev);
 	Node *n = ev->node;
 	struct sir *s = NULL;
+	/* If node is already infected, don't process this TRANSMIT
+	   event for it */
 	if (ev->node->state != SIR_INFECTED) {
 		if (ev->node->state == SIR_SUSCEPTIBLE)
 			s = sir_list_del_item(ev->node, &ListS);
@@ -163,7 +165,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 		/* add to infected list, if not in there already */
 		sir_list_add_sir(s, &ListI);
 		s->item->state = SIR_INFECTED;
-	}
+	} else return;
 	/* for each neighbour */
 	list_for_each_entry(s, n->neigh.next, struct sir, list) {
 		/* add transmit event */

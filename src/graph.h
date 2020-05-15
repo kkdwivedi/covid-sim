@@ -93,6 +93,7 @@ struct node {
 	/* node adjacency list anchor */
 	List neigh;
 	List *last;
+	bool initial;
 };
 
 typedef struct node Node;

@@ -51,5 +51,6 @@ void process_rec_SIR(PriorityQueue *pq, PQEvent *ev);
 void pqevent_delete(PQEvent *ev);
 
 size_t gen_random_id(size_t b, size_t except);
+size_t toss_coin(size_t ts, double bias);
 
 #endif
