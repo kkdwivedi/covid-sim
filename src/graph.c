@@ -19,13 +19,14 @@ bool sir_list_add_item(Node *n, List *l)
 	}
 	if (!pool) {
 		/* switch to NR_EDGES */
-		pool = calloc(SAMPLE_SIZE*2, sizeof(*pool));
+		pool = malloc(SAMPLE_SIZE*2 * sizeof(*pool));
 		if (!pool) return false;
 	}
 	struct sir *s = NULL;
 	if (iterator < SAMPLE_SIZE*2)
 		s = pool + iterator++;
 	if (!s) return false;
+	s->list.next = NULL;
 	list_append(l, &s->list);
 	s->item = n;
 	return true;
@@ -93,11 +94,13 @@ size_t sir_list_len(List *l)
 
 Node* node_new(size_t sz)
 {
-	Node *n = calloc(sz, sizeof(*n));
+	Node *n = malloc(sz * sizeof(*n));
 	if (!n) return NULL;
 	for (size_t i = 0; i < sz; i++) {
 		n[i].id = i + 1;
 		n[i].state = SIR_SUSCEPTIBLE;
+		n[i].neigh.next = NULL;
+		n[i].last = NULL;
 	}
 	return n;
 }

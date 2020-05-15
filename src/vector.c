@@ -11,7 +11,7 @@ int vector_grow_many(Vector *v, size_t n)
 {
 	/* check for maximum number of pools */
 	if (v->nr_pool + n > MAX_SZ/v->pool) return -ENOMEM;
-	void *p = calloc(v->nr_pool + n, v->pool);
+	void *p = malloc((v->nr_pool + n) * v->pool);
 	if (!p) return -errno;
 	memcpy(p, v->p, v->unit * v->length);
 	free(v->p);
@@ -85,13 +85,13 @@ bool vector_pop_back(Vector *v)
 Vector* vector_new(size_t unit)
 {
 	if (!unit) return NULL;
-	Vector *v = calloc(1, sizeof(*v));
+	Vector *v = malloc(sizeof(*v));
 	if (!v)	return NULL;
 	v->length = 0;
 	v->unit = unit;
 	if (unit > SIZE_MAX/32) v->pool = unit;
 	else v->pool = v->unit * 32;
-	v->p = calloc(1, v->pool);
+	v->p = malloc(v->pool);
 	if (!v->p) {
 		free(v);
 		return NULL;

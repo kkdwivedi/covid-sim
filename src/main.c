@@ -22,8 +22,6 @@ char log_buf[LOG_BUF_SIZE];
 List ListS;
 List ListI;
 List ListR;
-
-size_t time;
 size_t max_conn;
 
 #define DUMP_NUM  0x00000001
@@ -78,17 +76,6 @@ static void dump_stats(Node *n, unsigned mask)
 	log_info("================================");
 }
 
-static size_t gen_random_id(size_t b, size_t except)
-{
-	assert(b);
-	// b = b < RAND_MAX + 1ULL ? b : RAND_MAX + 1ULL;
-	assert(except < b);
-	size_t r;
-	if (b == 1) return 0;
-	while ((r = lrand48() % b) == except);
-	return r;
-}
-
 int main(int argc, char *argv[])
 {
 	PriorityQueue *pq = NULL;
@@ -100,7 +87,7 @@ int main(int argc, char *argv[])
 	reserve_mem(512*1024*1024);
 #endif
 
-	srand48(0xfaceb00c);
+	srand48(0x0bad1dea);
 	if (argc > 1)
 		usage();
 
@@ -134,9 +121,9 @@ int main(int argc, char *argv[])
 	dump_stats(NULL, DUMP_SIR);
 
 	// now connect nodes, randomly
-	for (size_t i = lrand48() % SAMPLE_SIZE; i < SAMPLE_SIZE; i += 2) {
+	for (size_t i = 0; i < SAMPLE_SIZE; i += 2) {
 		int c = 0;
-		c = lrand48() % NR_EDGES/2;
+		c = lrand48() % (NR_EDGES+1);
 		while (c--) {
 			size_t j = gen_random_id(SAMPLE_SIZE, i);
 			node_connect(&narr[i], &narr[j]);
@@ -147,22 +134,19 @@ int main(int argc, char *argv[])
 
 	size_t infect = gen_random_id(SAMPLE_SIZE, 0);
 	while (infect--) {
-		size_t r = gen_random_id(SAMPLE_SIZE, 0);
-		/*
-		struct sir *s = sir_list_del_item(narr + r, &ListS);
-		if (!s) {
-			log_warn("Node %u not found in Susceptible list.", narr[r].id);
-			continue;
-		}
-		else sir_list_add_sir(s, &ListI);
-		*/
+		size_t r = gen_random_id(SAMPLE_SIZE, -1);
+		if (narr[r].state != SIR_INFECTED) {
+			struct sir *s = sir_list_del_item(narr + r, &ListS);
+			sir_list_add_sir(s, &ListI);
+			s->item->state = SIR_INFECTED;
+		} else continue;
 		PQEvent *ev = pqevent_new(narr + r, TRANSMIT);
 		if (!ev) {
 			log_warn("Failed to allocate TRANSMIT event for spreader %u.", narr[r].id);
 			log_oom();
 			continue;
 		}
-		ev->timestamp = time++;
+		ev->timestamp = 0;
 		if (!pqevent_add(pq, ev)) {
 			log_warn("Failed to add TRANSMIT event for spreader %u", narr[r].id);
 			pqevent_delete(ev);
@@ -174,10 +158,11 @@ int main(int argc, char *argv[])
 
 	// begin simulation
 	PQEvent *ev;
-	for (ev = pqevent_next(pq); ev && ev->timestamp < TIME_MAX; ev = pqevent_next(pq)) {
+	for (ev = pqevent_next(pq); ev && ev->timestamp <= TIME_MAX; ev = pqevent_next(pq)) {
 		if (ev->type == TRANSMIT) {
 			log_info("Processing event TRANSMIT at time %lu for Node %u", ev->timestamp, ev->node->id);
-			if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE, SIR_RECOVERED))
+			if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE, SIR_RECOVERED) ||
+				(ev->timestamp == 0 && ev->node->state == SIR_INFECTED))
 				process_trans_SIR(pq, ev);
 		} else if (ev->type == RECOVER) {
 			log_info("Processing event RECOVER at time %lu for Node %u", ev->timestamp, ev->node->id);

@@ -9,7 +9,7 @@
 
 PriorityQueue* pq_new(void)
 {
-	PriorityQueue *pq = calloc(1, sizeof(*pq));
+	PriorityQueue *pq = malloc(sizeof *pq);
 	if (!pq) return NULL;
 	pq->vec = vector_new(sizeof(PQEvent*));
 	/* caught by cppcheck */
@@ -30,7 +30,7 @@ PQEvent* pqevent_new(Node *node, EventType type)
 {
 	assert(node);
 	assert(type < _EVENT_TYPE_MAX);
-	PQEvent *ev = calloc(1, sizeof(*ev));
+	PQEvent *ev = malloc(sizeof *ev);
 	if (!ev) return NULL;
 	ev->type = type;
 	ev->node = node;
@@ -50,21 +50,31 @@ static void swap(PQEvent **a, PQEvent **b)
 	*b = temp;
 }
 
-static void pq_heapify(PriorityQueue *pq, size_t i)
+static void pq_heapify(PriorityQueue *pq, size_t i, bool down)
 {
 	/* min heap */
-	if (i >= pq->vec->length) return;
 	size_t lim = pq->vec->length;
-	size_t left = i * 2 + 1;
-	size_t right = i * 2 + 2;
-	size_t smaller = i;
-	if (left < lim && pq->events[smaller]->timestamp > pq->events[left]->timestamp)
-		smaller = left;
-	if (right < lim && pq->events[smaller]->timestamp > pq->events[right]->timestamp)
-		smaller = right;
-	if (smaller != i) {
-		swap(&pq->events[i], &pq->events[smaller]);
-		pq_heapify(pq, smaller);
+	if (i >= lim) return;
+	if (down) {
+		size_t left = i * 2 + 1;
+		size_t right = i * 2 + 2;
+		size_t smaller = i;
+		if (left < lim && pq->events[smaller]->timestamp > pq->events[left]->timestamp)
+			smaller = left;
+		if (right < lim && pq->events[smaller]->timestamp > pq->events[right]->timestamp)
+			smaller = right;
+		if (smaller != i) {
+			swap(&pq->events[i], &pq->events[smaller]);
+			pq_heapify(pq, smaller, true);
+		}
+	} else {
+		/* if i % 2 is true then left child */
+		if (i == 0) return;
+		size_t parent = (i % 2) ? (i - 1)/2 : (i - 2)/2;
+		if (pq->events[i]->timestamp < pq->events[parent]->timestamp) {
+			swap(&pq->events[i], &pq->events[parent]);
+			pq_heapify(pq, parent, false);
+		}
 	}
 }
 
@@ -80,7 +90,7 @@ bool pqevent_add(PriorityQueue *pq, PQEvent *ev)
 	/* caught by ASAN: possibly resized/reinitialized, so replace
 	   with new address. This can also happen during normal growth */
 	pq->events = (PQEvent **) pq->vec->p;
-	pq_heapify(pq, pq->vec->length - 1);
+	pq_heapify(pq, pq->vec->length - 1, false);
 	return true;
 }
 
@@ -91,7 +101,7 @@ static bool pq_pop_front(PriorityQueue *pq)
 	pq->events[0] = pq->events[pq->vec->length - 1];
 	vector_pop_back(pq->vec);
 	pq->events = (PQEvent **) pq->vec->p;
-	pq_heapify(pq, 0);
+	pq_heapify(pq, 0, true);
 	i++;
 	/* XXX: add vec_is_empty primitive, vector might have been reset */
 	if (i > 7 && pq->vec->length) {
@@ -110,26 +120,33 @@ PQEvent* pqevent_next(PriorityQueue *pq)
 	return r;
 }
 
+size_t gen_random_id(size_t b, size_t except)
+{
+	assert(b);
+	assert(except < b || except == (size_t) -1);
+	size_t r;
+	if (b == 1) return 0;
+	r = lrand48() % b;
+	return r == except ? (r < 1 ? r + 1 : r - 1) : r;
+}
+
 static bool get_heads(double bias)
 {
-	assert(bias >= 0.0 && bias <= 1.0);
+	assert(bias <= 1.0);
 	int i = bias * 1000;
-	if (lrand48() % 1000 < i) return true;
+	if (gen_random_id(1001, i) < i) return true;
 	return false;
 }
 
-static size_t toss_coin(size_t time, double bias)
+static size_t toss_coin(size_t ts, double bias)
 {
 	assert(bias <= 1.0);
 	size_t t = 0;
-	while (++t <= TIME_MAX - time) {
+	while (++t <= TIME_MAX - ts) {
 		if (get_heads(bias))
 			break;
 	}
-	/* speed up things */
-	time += 4;
-	/* days elapsed */
-	return time <= (TIME_MAX - t) ? time + t : TIME_MAX;
+	return ts + t + 1 < TIME_MAX ? ts + t + 1 : TIME_MAX;
 }
 
 void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
@@ -137,7 +154,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 	assert(pq);
 	assert(ev);
 	Node *n = ev->node;
-	struct sir *s;
+	struct sir *s = NULL;
 	if (ev->node->state != SIR_INFECTED) {
 		if (ev->node->state == SIR_SUSCEPTIBLE)
 			s = sir_list_del_item(ev->node, &ListS);
@@ -151,6 +168,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 	list_for_each_entry(s, n->neigh.next, struct sir, list) {
 		/* add transmit event */
 		Node *n = s->item;
+		if (n->state == SIR_INFECTED) continue;
 		PQEvent *r = NULL, *t = pqevent_new(n, TRANSMIT);
 		if (!t) {
 			log_error("Failed to create TRANSMIT event for Node %u", n->id);
@@ -158,6 +176,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 			continue;
 		}
 		t->timestamp = toss_coin(ev->timestamp, ev->T);
+		ev->timestamp += t->timestamp - ev->timestamp;
 		if (!pqevent_add(pq, t)) {
 			log_error("Failed to add TRANSMIT event for Node %u", n->id);
 			goto finish;
@@ -171,7 +190,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 			goto finish;
 		}
 		/* can only recover after being detected as infected */
-		r->timestamp = toss_coin(t->timestamp, ev->Y);
+		r->timestamp = toss_coin(ev->timestamp, ev->Y) + 12;
 		if (!pqevent_add(pq, r)) {
 			log_error("Failed to add RECOVER event for Node %u", n->id);
 			goto finish;
@@ -187,7 +206,7 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 {
 	assert(ev);
-	struct sir *s;
+	struct sir *s = NULL;
 	if (ev->node->state != SIR_RECOVERED) {
 		if (ev->node->state == SIR_SUSCEPTIBLE)
 			s = sir_list_del_item(ev->node, &ListS);

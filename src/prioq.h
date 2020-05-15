@@ -5,7 +5,6 @@
 #include "graph.h"
 #include "vector.h"
 
-extern size_t time;
 extern List ListS;
 extern List ListI;
 extern List ListR;
@@ -50,5 +49,7 @@ PQEvent* pqevent_next(PriorityQueue *pq);
 void process_trans_SIR(PriorityQueue *pq, PQEvent *ev);
 void process_rec_SIR(PriorityQueue *pq, PQEvent *ev);
 void pqevent_delete(PQEvent *ev);
+
+size_t gen_random_id(size_t b, size_t except);
 
 #endif
