@@ -22,7 +22,7 @@ char log_buf[LOG_BUF_SIZE];
 List ListS;
 List ListI;
 List ListR;
-size_t max_conn;
+size_t max_conn = 0;
 
 #define DUMP_NUM  0x00000001
 #define DUMP_NODE 0x00000002
@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
 	// now connect nodes, randomly
 	for (size_t i = 0; i < SAMPLE_SIZE; i += 2) {
 		int c = 0;
-		c = rand() % (NR_EDGES+1);
+		c = gen_random_id(NR_EDGES+1, -1);
 		while (c--) {
 			size_t j = gen_random_id(SAMPLE_SIZE, i);
 			node_connect(&narr[i], &narr[j]);
@@ -177,14 +177,15 @@ int main(int argc, char *argv[])
 	PQEvent *ev;
 	for (ev = pqevent_next(pq); ev && ev->timestamp < TIME_MAX; ev = pqevent_next(pq)) {
 		if (ev->type == TRANSMIT) {
-			log_info("Processing event TRANSMIT at time %lu for Node %u", ev->timestamp, ev->node->id);
 			if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE, SIR_RECOVERED) ||
-				(ev->timestamp == 0 && ev->node->state == SIR_INFECTED))
+				(ev->timestamp == 0 && ev->node->state == SIR_INFECTED)) {
+				log_info("Processing event TRANSMIT at time %lu for Node %u", ev->timestamp, ev->node->id);
 				process_trans_SIR(pq, ev);
-		} else if (ev->type == RECOVER) {
+			}
+		} else if (ev->type == RECOVER && ev->node->state != SIR_RECOVERED) {
 			log_info("Processing event RECOVER at time %lu for Node %u", ev->timestamp, ev->node->id);
 			process_rec_SIR(pq, ev);
-		} else assert(false);
+		} /* else skip the event */
 		pqevent_delete(ev);
 	}
 	if (ev) {

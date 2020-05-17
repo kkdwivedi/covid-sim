@@ -6,6 +6,13 @@
 #include <stdio.h>
 
 #include "graph.h"
+#include "config.h"
+
+#define POOL_SIZE (SAMPLE_SIZE * (NR_EDGES + 1))
+
+extern List ListS;
+extern List ListI;
+extern List ListR;
 
 bool sir_list_add_item(Node *n, List *l)
 {
@@ -18,12 +25,11 @@ bool sir_list_add_item(Node *n, List *l)
 		return true;
 	}
 	if (!pool) {
-		/* switch to NR_EDGES */
-		pool = malloc(SAMPLE_SIZE*2 * sizeof(*pool));
+		pool = malloc(POOL_SIZE * sizeof *pool);
 		if (!pool) return false;
 	}
 	struct sir *s = NULL;
-	if (iterator < SAMPLE_SIZE*2)
+	if (iterator < POOL_SIZE)
 		s = pool + iterator++;
 	if (!s) return false;
 	s->list.next = NULL;

@@ -127,7 +127,7 @@ size_t gen_random_id(size_t b, size_t except)
 	size_t r;
 	if (b == 1) return 0;
 	r = rand() % b;
-	return r == except ? (r < 1 ? r + 1 : r - 1) : r;
+	return r == except ? (except ? r - 1 : r + 1) : r;
 }
 
 static bool get_heads(double bias)
@@ -146,7 +146,7 @@ size_t toss_coin(size_t ts, double bias)
 		if (get_heads(bias))
 			break;
 	}
-	return ts + t + 1 < TIME_MAX ? ts + t + 1 : TIME_MAX;
+	return ts + t + 1 < TIME_MAX - 12 ? ts + t + 1 : TIME_MAX - 12 ;
 }
 
 void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)

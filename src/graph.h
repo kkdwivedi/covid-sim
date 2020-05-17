@@ -34,15 +34,11 @@ struct list {
 
 typedef struct list List;
 
-extern List ListS;
-extern List ListI;
-extern List ListR;
-
 static inline List* list_last(List *head)
 {
-	if (head)
-		while (head->next)
-			head = head->next;
+	assert(head);
+	while (head->next)
+		head = head->next;
 	return head;
 }
 
