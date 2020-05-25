@@ -106,7 +106,7 @@ Node* node_new(size_t sz)
 		n[i].id = i + 1;
 		n[i].state = SIR_SUSCEPTIBLE;
 		n[i].neigh.next = NULL;
-		n[i].last = NULL;
+		n[i].tail = &n[i].neigh;
 		n[i].initial = false;
 	}
 	return n;
@@ -116,12 +116,20 @@ void node_connect(Node *a, Node *b)
 {
 	assert(a);
 	assert(b);
+	static bool conn_cache[SAMPLE_SIZE][SAMPLE_SIZE] = {};
 	struct sir *i;
 	if (a == b) return;
-	list_for_each_entry(i, a->neigh.next, struct sir, list)
-		if (i->item == b) return;
-	sir_list_add_item(a, &b->neigh);
-	sir_list_add_item(b, &a->neigh);
+	//list_for_each_entry(i, a->neigh.next, struct sir, list)
+	//	if (i->item == b) return;
+	if (!conn_cache[a->id-1][b->id-1] || !conn_cache[b->id-1][a->id-1]) {
+		assert(!conn_cache[a->id-1][b->id-1] && !conn_cache[b->id-1][a->id-1]);
+		conn_cache[a->id-1][b->id-1] = true;
+		conn_cache[b->id-1][a->id-1] = true;
+	} else return;
+	sir_list_add_item(a, b->tail);
+	b->tail = b->tail->next;
+	sir_list_add_item(b, a->tail);
+	a->tail = a->tail->next;
 	max_conn++;
 }
 

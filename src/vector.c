@@ -16,7 +16,7 @@ int vector_grow_many(Vector *v, size_t n)
 	memcpy(p, v->p, v->unit * v->length);
 	free(v->p);
 	v->p = p;
-	v->nr_pool++;
+	v->nr_pool += n;
 	return 0;
 }
 
@@ -89,8 +89,8 @@ Vector* vector_new(size_t unit)
 	if (!v)	return NULL;
 	v->length = 0;
 	v->unit = unit;
-	if (unit > SIZE_MAX/32) v->pool = unit;
-	else v->pool = v->unit * 32;
+	if (unit > 4096) v->pool = unit;
+	else v->pool = 4096;
 	v->p = malloc(v->pool);
 	if (!v->p) {
 		free(v);

@@ -88,7 +88,7 @@ struct node {
 	Status state;
 	/* node adjacency list anchor */
 	List neigh;
-	List *last;
+	List *tail;
 	bool initial;
 };
 

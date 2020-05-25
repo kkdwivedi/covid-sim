@@ -156,13 +156,9 @@ void process_trans_SIR(PriorityQueue *pq, PQEvent *ev)
 	Node *n = ev->node;
 	struct sir *s = NULL;
 	/* If node is already infected, don't process this TRANSMIT
-	   event for it */
-	if (ev->node->state != SIR_INFECTED) {
-		if (ev->node->state == SIR_SUSCEPTIBLE)
-			s = sir_list_del_item(ev->node, &ListS);
-		else if (ev->node->state == SIR_RECOVERED)
-			s = sir_list_del_item(ev->node, &ListR);
-		/* add to infected list, if not in there already */
+	   event for it. Same for recovered. */
+	if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE)) {
+		s = sir_list_del_item(ev->node, &ListS);
 		sir_list_add_sir(s, &ListI);
 		s->item->state = SIR_INFECTED;
 	} else return;
@@ -209,11 +205,8 @@ void process_rec_SIR(PriorityQueue *pq, PQEvent *ev)
 {
 	assert(ev);
 	struct sir *s = NULL;
-	if (ev->node->state != SIR_RECOVERED) {
-		if (ev->node->state == SIR_SUSCEPTIBLE)
-			s = sir_list_del_item(ev->node, &ListS);
-		else if (ev->node->state == SIR_INFECTED)
-			s = sir_list_del_item(ev->node, &ListI);
+	if (UINT_IN_SET(ev->node->state, SIR_SUSCEPTIBLE, SIR_INFECTED)) {
+		s = sir_list_del_item(ev->node, ev->node->state == SIR_SUSCEPTIBLE ? &ListS : &ListI);
 		sir_list_add_sir(s, &ListR);
 		s->item->state = SIR_RECOVERED;
 	}
